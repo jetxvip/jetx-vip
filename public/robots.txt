@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# Block admin panel from indexing
+Disallow: /adminitojetxvip
+Disallow: /adminitojetxvip/
+
+Sitemap: https://jetx.vip/sitemap.xml

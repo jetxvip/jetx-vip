@@ -1,0 +1,7 @@
+{
+  "startupCommands": [
+    "npm install; printf 'ADMIN_EMAIL=admin@jetx.vip\\nADMIN_PASSWORD=JetX2026!\\nJWT_SECRET=jetx-dev-secret-2026\\nNEXT_PUBLIC_ADMIN_PATH=adminitojetxvip\\n' > .env.local; npm run dev"
+  ],
+  "projectId": "1518d2d8-b775-40aa-9c88-e84143e5e32d",
+  "templateId": "any"
+}

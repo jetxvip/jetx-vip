@@ -1,0 +1,250 @@
+'use client';
+import { useState } from 'react';
+import { useLanguage } from '../context/LanguageContext';
+
+const CONTENT = {
+  en: {
+    pageTitle: 'Privacy Policy & Terms of Use',
+    tabs: ['Israel', 'Europe (EU / GDPR)'],
+    sections: [
+      {
+        title: 'Terms of Use, Limitation of Liability and Privacy Policy – Israel',
+        paragraphs: [
+          'Use of the website, the services offered therein and any content included in it constitutes full, informed, explicit and irrevocable consent by the user to all the terms, limitations and provisions detailed below. The user declares that they have carefully read these terms, understood their legal and practical meaning, and agree to them without any reservation, condition or modification.',
+          'The website is intended to provide general information, accessibility and coordination services in the field of private aviation, and any use of it is made at the user\'s sole responsibility. All information, content, data, offers or representations on the website, including prices, availability, specifications, aircraft types, images or descriptions, are provided for illustrative purposes only and do not constitute a binding offer, commitment or representation of any kind by the company.',
+          'Errors, inaccuracies, omissions or changes may occur, and the company reserves the right to update, modify, cancel or correct any information or offer at any time, without prior notice and at its sole discretion.',
+          'The services on the website are provided "as is" (AS IS) and "as available" (AS AVAILABLE), without any warranty of any kind, express or implied, including fitness for a particular purpose, reliability, availability, quality or suitability.',
+          'Without limiting the generality of the foregoing, and not emphasized intentionally at the beginning of this document but included as part of the overall terms, it is clarified that the company operates solely as a connecting platform, intended to assist in creating contact, coordination and accessibility between users and third-party service providers in the field of private aviation. The company does not operate flights, does not own aircraft, does not provide aviation services directly and does not employ flight crews.',
+          'All flight services, in all their aspects, are performed and provided exclusively by third-party providers. Accordingly, the binding and material agreement regarding flight services is made directly between the user and a third-party provider, and the company is not a party to such agreement and bears no responsibility arising from it.',
+          'For the avoidance of doubt, all financial documents, including invoices, receipts or payment confirmations, are issued solely by third-party providers, and the company is not the issuing entity nor a party to the direct financial transaction for flight services, unless explicitly stated otherwise.',
+          'Full, direct and exclusive responsibility for all aspects of the service, including safety, maintenance, licensing, crew, flight schedules, delays, cancellations, service quality and any operational or professional component, lies solely with third-party providers.',
+          'The company does not verify and is not obligated to verify the competence, condition, licensing or insurance of such providers, and any reliance on them is at the user\'s sole responsibility.',
+          'The user acknowledges that private flights inherently involve various risks, including safety risks, and chooses to use such services at their full personal responsibility.',
+          'To the maximum extent permitted by law, the company shall not bear any liability for any damage of any kind, including direct, indirect, consequential, special or punitive damages, loss of profits, loss of data, emotional distress or any other loss.',
+          'Without derogating from the above, if liability is imposed on the company, it shall be limited to the lower of the amount actually paid to the company (if any) or 100 euros.',
+          'Payment, cancellation and refund terms may be determined solely by third-party providers, and the company is not responsible for such policies or their implementation.',
+          'The company shall not be liable for events beyond its control, including weather conditions, technical failures, strikes, war, pandemics or governmental decisions.',
+          'The user undertakes to use the website lawfully and not to perform any action that may harm the website, the company or third parties.',
+          'The user agrees to indemnify the company against any damage, claim or demand arising from a breach of these terms or from use of the website.',
+          'The company may collect and process personal data for the purpose of providing the service, including transferring it to third parties.',
+          'The website uses cookies and similar technologies.',
+          'Any claim must be filed within 12 months from the date the cause of action arose.',
+          'The governing law shall be Israeli law.',
+          'The company may update these terms at any time.',
+          'If any provision is found invalid, the remaining provisions shall remain in full force.',
+          'These terms constitute the entire agreement between the parties.',
+        ],
+      },
+      {
+        title: 'Terms of Use, Limitation of Liability and Privacy Policy – Europe (EU / GDPR)',
+        paragraphs: [
+          'Use of the website constitutes full, informed and explicit consent by the user to all the terms detailed below, in accordance with applicable European law, including the General Data Protection Regulation (GDPR).',
+          'The user confirms that they use the website voluntarily and understand that all information provided is for general informational purposes only and does not constitute a binding contractual commitment.',
+          'The website and services are provided "as is" (AS IS) and "as available" (AS AVAILABLE), without any warranties, including fitness for a particular purpose, reliability, availability or accuracy.',
+          'Errors, inaccuracies or changes may occur, and the company may update or cancel any information or offer at any time.',
+          'As part of the overall service offering, and in order to facilitate convenient access to private aviation solutions, the company operates solely as a connecting platform between users and third-party service providers. The company does not operate flights, does not own aircraft and does not provide aviation services directly.',
+          'All flight services are performed exclusively by third-party providers, and the company is not a party to any agreements between the user and such providers.',
+          'All payments, invoices and receipts are issued solely by third-party providers, and the company bears no responsibility for financial, tax or operational aspects of such services.',
+          'Full responsibility for all aspects of the service, including safety, licensing, operation, service quality and availability, lies solely with third-party providers.',
+          'The company does not verify and is not obligated to verify such providers, and any reliance on them is at the user\'s sole responsibility.',
+          'To the maximum extent permitted under applicable European law, the company shall not be liable for any damage, including direct or indirect damages, loss of profits, loss of data or any other loss.',
+          'Where liability is imposed, it shall be limited to the lower of the amount paid to the company or 100 euros, to the extent permitted by law.',
+          'The user acknowledges that private aviation involves risks and assumes full responsibility for the use of such services.',
+          'The company shall not be liable for force majeure events, including weather conditions, pandemics, strikes, terrorism or regulatory decisions.',
+          'For the purpose of providing services, the company may collect and process personal data in accordance with GDPR, including: name, contact details, booking details, usage data and technical data.',
+          'Data may be transferred to third-party providers and to countries outside the European Union, including Israel, subject to appropriate safeguards and applicable law.',
+          'Users have rights under GDPR, including the right to access, rectify, erase, restrict processing and object.',
+          'The website uses cookies for operational, statistical and marketing purposes.',
+          'The user agrees not to use the website for unlawful purposes.',
+          'The user agrees to indemnify the company against any claim arising from a breach of these terms.',
+          'Any dispute shall be handled individually, and the user waives participation in class actions where permitted by law.',
+          'Any claim must be filed within 12 months from the date the cause of action arose, subject to applicable law.',
+          'The company may update these terms at any time.',
+          'If any provision is found invalid, the remaining provisions shall remain in force.',
+          'These terms constitute the entire agreement between the user and the company.',
+        ],
+      },
+    ],
+  },
+  he: {
+    pageTitle: 'מדיניות פרטיות ותנאי שימוש',
+    tabs: ['ישראל', 'אירופה (EU / GDPR)'],
+    sections: [
+      {
+        title: 'תנאי שימוש, הגבלת אחריות ומדיניות פרטיות – ישראל',
+        paragraphs: [
+          'השימוש באתר, בשירותים המוצעים בו ובכל תוכן הכלול בו, מהווה הסכמה מלאה, מודעת, מפורשת ובלתי חוזרת מצד המשתמש לכל התנאים, ההגבלות וההוראות המפורטים להלן. המשתמש מצהיר כי קרא תנאים אלו בקפידה, הבין את משמעותם המשפטית והמעשית, והוא מסכים להם ללא כל הסתייגות, תנאי או שינוי.',
+          'האתר נועד לספק מידע, הנגשה ושירותי תיאום כלליים בתחום הטיסות הפרטיות, כאשר כל שימוש בו נעשה על אחריות המשתמש בלבד. כל מידע, תוכן, נתון, הצעה או הצגה באתר, לרבות מחירים, זמינות, מפרטים, סוגי מטוסים, תמונות או תיאורים – מוצגים לצורכי המחשה בלבד ואינם מהווים הצעה מחייבת, התחייבות או מצג כלשהו מצד החברה.',
+          'ייתכנו טעויות, אי דיוקים, השמטות או שינויים, והחברה שומרת לעצמה את הזכות לעדכן, לשנות, לבטל או לתקן כל מידע או הצעה בכל עת, ללא הודעה מוקדמת ולפי שיקול דעתה הבלעדי.',
+          'מובהר כי השירותים באתר ניתנים כפי שהם (AS IS) וכפי שהם זמינים (AS AVAILABLE), ללא כל אחריות מכל סוג, מפורשת או משתמעת, לרבות התאמה לצרכי המשתמש, אמינות, זמינות, איכות או התאמה למטרה מסוימת.',
+          'מבלי לגרוע מכלליות האמור לעיל, ובאופן שאינו מודגש במכוון בתחילת מסמך זה אלא מובא כחלק ממכלול התנאים, מובהר כי החברה פועלת כפלטפורמה מקשרת בלבד, אשר מטרתה לסייע ביצירת קשר, תיאום והנגשה בין משתמשים לבין ספקי שירותים חיצוניים בתחום התעופה הפרטית. החברה אינה מפעילה טיסות, אינה בעלת כלי טיס, אינה מספקת שירותי תעופה בפועל ואינה מעסיקה צוותי אוויר.',
+          'כל שירות טיסה, על כל מרכיביו, מבוצע ומסופק בפועל על ידי ספקי צד שלישי בלבד. בהתאם לכך, ההתקשרות המהותית והמחייבת בכל הנוגע לשירותי הטיסה נעשית ישירות בין המשתמש לבין ספק צד שלישי, והחברה אינה צד להסכם זה ואינה נושאת בכל אחריות הנובעת ממנו.',
+          'למען הסר ספק, כל מסמך חשבונאי, לרבות חשבוניות, קבלות או אישורי תשלום, מונפקים על ידי ספקי צד שלישי בלבד, והחברה אינה מהווה גורם מנפיק או צד להתחשבנות הישירה בגין שירותי הטיסה, אלא אם צוין אחרת במפורש.',
+          'האחריות המלאה, הישירה והבלעדית לכל היבטי השירות, לרבות בטיחות, תחזוקה, רישוי, צוות, זמני טיסה, עיכובים, ביטולים, איכות השירות וכל היבט תפעולי או מקצועי אחר – חלה על ספקי צד שלישי בלבד.',
+          'החברה אינה בודקת ואינה מתחייבת לבדוק את כשירותם, תקינותם, רישוים או ביטוחם של ספקים אלו, וכל הסתמכות עליהם נעשית על אחריות המשתמש בלבד.',
+          'המשתמש מודע לכך שטיסות פרטיות כרוכות מטבען בסיכונים שונים, לרבות סיכוני בטיחות, והוא בוחר לעשות שימוש בשירותים אלו מתוך אחריותו האישית והמלאה.',
+          'במידה המרבית המותרת לפי דין, החברה לא תישא בכל אחריות לנזק מכל סוג, לרבות נזק ישיר, עקיף, תוצאתי, מיוחד או עונשי, אובדן רווח, אובדן נתונים, עוגמת נפש או כל הפסד אחר.',
+          'מבלי לגרוע מהאמור, ככל שתוטל אחריות על החברה, היא תוגבל לסכום הנמוך מבין הסכום ששולם בפועל לחברה לבין 100 אירו.',
+          'ייתכן כי תנאי תשלום, ביטול והחזר נקבעים על ידי ספקים חיצוניים בלבד, והחברה אינה אחראית למדיניות זו או ליישומה.',
+          'החברה לא תישא באחריות לאירועים שאינם בשליטתה, לרבות תנאי מזג אוויר, תקלות, שביתות, מלחמה, מגפות או החלטות רשויות.',
+          'המשתמש מתחייב להשתמש באתר באופן חוקי בלבד ולא לבצע כל פעולה העלולה לפגוע באתר, בחברה או בצדדים שלישיים.',
+          'המשתמש מתחייב לשפות את החברה בגין כל נזק, תביעה או דרישה הנובעים מהפרת תנאים אלו או מהשימוש באתר.',
+          'החברה רשאית לאסוף ולעבד מידע אישי לצורך מתן השירות, לרבות העברתו לצדדים שלישיים.',
+          'החברה עושה שימוש בעוגיות (Cookies) ובטכנולוגיות דומות.',
+          'כל תביעה תוגש בתוך 12 חודשים ממועד היווצרות העילה.',
+          'הדין החל הוא הדין הישראלי.',
+          'החברה רשאית לעדכן תנאים אלו בכל עת.',
+          'אם סעיף כלשהו יימצא בלתי תקף, יתר הסעיפים יישארו בתוקף.',
+          'תנאים אלו מהווים את ההסכם המלא בין הצדדים.',
+        ],
+      },
+      {
+        title: 'תנאי שימוש, הגבלת אחריות ומדיניות פרטיות – אירופה (EU / GDPR)',
+        paragraphs: [
+          'השימוש באתר מהווה הסכמה מלאה, מודעת ומפורשת מצד המשתמש לכל התנאים המפורטים להלן, בהתאם לדין האירופי החל, לרבות רגולציית הגנת המידע הכללית (GDPR).',
+          'המשתמש מאשר כי הוא עושה שימוש באתר מרצונו החופשי וכי הוא מבין שכל מידע המוצג בו ניתן לצורכי מידע כללי בלבד ואינו מהווה התחייבות חוזית.',
+          'האתר והשירותים ניתנים כפי שהם (AS IS) וכפי שהם זמינים (AS AVAILABLE), ללא כל אחריות, לרבות התאמה למטרה מסוימת, אמינות, זמינות או דיוק.',
+          'ייתכנו טעויות, אי דיוקים או שינויים, והחברה רשאית לעדכן או לבטל כל מידע או הצעה בכל עת.',
+          'כחלק ממכלול השירותים, ומתוך מטרה להקל על המשתמש ולאפשר לו גישה נוחה לפתרונות תעופה פרטית, פועלת החברה כפלטפורמה מקשרת בלבד בין משתמשים לבין ספקי שירותים חיצוניים. החברה אינה מפעילת טיסות, אינה בעלת צי מטוסים ואינה מספקת שירותי תעופה בפועל.',
+          'כל שירותי הטיסה מבוצעים באופן מלא ובלעדי על ידי ספקי צד שלישי, והחברה אינה צד להסכמים הנערכים בין המשתמש לבין ספקים אלו.',
+          'כל תשלום, חשבונית או קבלה מונפקים על ידי ספק צד שלישי בלבד, והחברה אינה אחראית להיבטים חשבונאיים, מיסויים או תפעוליים של שירותים אלו.',
+          'האחריות המלאה לכל היבטי השירות, לרבות בטיחות, רישוי, תפעול, איכות השירות וזמינות – חלה על ספקי צד שלישי בלבד.',
+          'החברה אינה בודקת ואינה מתחייבת לבדוק את הספקים, וכל הסתמכות עליהם נעשית באחריות המשתמש בלבד.',
+          'במידה המרבית המותרת לפי דין אירופי, החברה לא תישא בכל אחריות לנזק מכל סוג, לרבות נזק ישיר או עקיף, אובדן רווחים, אובדן מידע או כל הפסד אחר.',
+          'במקרה שתיקבע אחריות, היא תוגבל לסכום הנמוך מבין הסכום ששולם לחברה לבין 100 אירו, ככל שהדבר מותר לפי הדין החל.',
+          'המשתמש מאשר כי טיסות פרטיות כרוכות בסיכונים, והוא נוטל על עצמו את האחריות לשימוש בשירותים אלו.',
+          'החברה לא תישא באחריות לאירועי כוח עליון, לרבות מזג אוויר, מגפות, שביתות, טרור או החלטות רגולטוריות.',
+          'לצורך מתן השירות, החברה רשאית לאסוף ולעבד מידע אישי בהתאם ל-GDPR, לרבות: שם, פרטי קשר, פרטי הזמנה, נתוני שימוש ונתונים טכניים.',
+          'המידע עשוי להיות מועבר לספקי צד שלישי ולמדינות מחוץ לאיחוד האירופי, לרבות ישראל, תוך נקיטת אמצעי הגנה סבירים ובהתאם לדין.',
+          'למשתמש עומדות זכויות לפי GDPR, לרבות זכות לעיון, תיקון, מחיקה, הגבלת עיבוד והתנגדות.',
+          'האתר עושה שימוש בעוגיות (Cookies) לצרכים תפעוליים, סטטיסטיים ושיווקיים.',
+          'המשתמש מתחייב שלא להשתמש באתר לצרכים בלתי חוקיים.',
+          'המשתמש מתחייב לשפות את החברה בגין כל תביעה הנובעת מהפרת תנאים אלו.',
+          'כל מחלוקת תתברר באופן אישי בלבד, והמשתמש מוותר על השתתפות בתובענות ייצוגיות ככל שהדין מאפשר.',
+          'כל תביעה תוגש בתוך 12 חודשים ממועד היווצרות העילה, בכפוף לדין החל.',
+          'החברה רשאית לעדכן תנאים אלו בכל עת.',
+          'אם סעיף יימצא בלתי תקף, יתר הסעיפים יישארו בתוקף.',
+          'תנאים אלו מהווים את ההסכם המלא בין המשתמש לבין החברה.',
+        ],
+      },
+    ],
+  },
+};
+
+export default function PrivacyPolicy() {
+  const { lang } = useLanguage();
+  const isRTL = lang === 'he';
+  const content = CONTENT[lang] || CONTENT.en;
+  const [activeTab, setActiveTab] = useState(0);
+
+  const section = content.sections[activeTab];
+
+  return (
+    <div style={{ background: '#F7F4EE', minHeight: '100vh' }} dir={isRTL ? 'rtl' : 'ltr'}>
+      {/* Hero */}
+      <div style={{ background: '#0D0B0A', paddingTop: '7rem', paddingBottom: '4rem' }}>
+        <div className="container-max text-center">
+          <p className="text-[11px] tracking-[0.5em] uppercase font-sans mb-4" style={{ color: 'rgba(232,101,26,0.8)' }}>
+            JetX.VIP
+          </p>
+          <h1 className="heading-luxury text-4xl md:text-5xl" style={{ color: '#ffffff' }}>
+            {content.pageTitle}
+          </h1>
+          <div className="flex items-center justify-center gap-3 mt-5">
+            <div className="w-12 h-px" style={{ background: 'rgba(232,101,26,0.4)' }} />
+            <div className="w-1.5 h-1.5 rounded-full bg-orange" />
+            <div className="w-12 h-px" style={{ background: 'rgba(232,101,26,0.4)' }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ background: '#EAE4DA', borderBottom: '1px solid rgba(42,37,33,0.1)' }}>
+        <div className="container-max">
+          <div className="flex gap-0">
+            {content.tabs.map((tab, i) => (
+              <button
+                key={i}
+                onClick={() => setActiveTab(i)}
+                className="px-8 py-5 text-[13px] font-sans tracking-[0.2em] uppercase transition-all duration-300 relative"
+                style={{
+                  color: activeTab === i ? '#2A2521' : 'rgba(42,37,33,0.45)',
+                  fontWeight: activeTab === i ? '500' : '300',
+                  borderBottom: activeTab === i ? '2px solid #E8651A' : '2px solid transparent',
+                }}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="container-max py-16 md:py-20">
+        <div style={{ maxWidth: 820, margin: '0 auto' }}>
+          {/* Section title */}
+          <h2
+            className="text-xl md:text-2xl font-sans font-semibold mb-10"
+            style={{ color: '#2A2521', lineHeight: 1.4 }}
+          >
+            {section.title}
+          </h2>
+
+          {/* Divider */}
+          <div className="flex items-center gap-4 mb-10">
+            <div className="flex-1 h-px" style={{ background: 'rgba(42,37,33,0.12)' }} />
+            <div className="w-1 h-1 rounded-full" style={{ background: '#E8651A' }} />
+            <div className="flex-1 h-px" style={{ background: 'rgba(42,37,33,0.12)' }} />
+          </div>
+
+          {/* Paragraphs */}
+          <div className="space-y-5">
+            {section.paragraphs.map((para, i) => (
+              <div
+                key={i}
+                className="flex gap-4 items-start"
+                style={{
+                  padding: '1rem 1.25rem',
+                  background: '#FAF8F4',
+                  borderRadius: '0.75rem',
+                  border: '1px solid rgba(42,37,33,0.07)',
+                }}
+              >
+                <div
+                  className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center mt-0.5"
+                  style={{ background: 'rgba(232,101,26,0.08)', border: '1px solid rgba(232,101,26,0.2)' }}
+                >
+                  <span className="text-[10px] font-sans font-semibold" style={{ color: '#E8651A' }}>{i + 1}</span>
+                </div>
+                <p
+                  className="text-sm font-sans font-light leading-relaxed"
+                  style={{ color: '#3D3025' }}
+                >
+                  {para}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          {/* Footer note */}
+          <div
+            className="mt-12 p-6 text-center"
+            style={{
+              background: '#EAE4DA',
+              borderRadius: '1rem',
+              border: '1px solid rgba(42,37,33,0.1)',
+            }}
+          >
+            <p className="text-[12px] font-sans tracking-wider uppercase mb-1" style={{ color: 'rgba(42,37,33,0.4)' }}>
+              JetX.VIP
+            </p>
+            <p className="text-[13px] font-sans font-light" style={{ color: 'rgba(42,37,33,0.5)' }}>
+              © 2026 JetX.vip. {isRTL ? 'כל הזכויות שמורות.' : 'All rights reserved.'}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
