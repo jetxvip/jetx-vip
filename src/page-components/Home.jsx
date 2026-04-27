@@ -181,15 +181,26 @@ function HangarBackground() {
   );
 }
 
+// ─── YouTube embed hosts (tried in order on failed playback) ──────────────────
+// youtube-nocookie.com is the PRIMARY host — it does not require cross-site
+// cookies and works even when Safari ITP blocks third-party tracking (the root
+// cause of Cyprus/iOS stuck-logo issue). youtube.com is the fallback.
+const YT_HOSTS = [
+  'https://www.youtube-nocookie.com/embed',
+  'https://www.youtube.com/embed',
+];
+const PLAY_TIMEOUT_MS = 5000; // wait before declaring each attempt failed
+
+function buildYtSrc(host, videoId) {
+  return `${host}/${videoId}?autoplay=1&mute=1&muted=1&loop=1&playlist=${videoId}` +
+    `&controls=0&modestbranding=1&playsinline=1&rel=0&enablejsapi=1` +
+    `&disablekb=1&fs=0&iv_load_policy=3&showinfo=0&origin=https://jetx.vip`;
+}
+
 // ─── Hero Section ─────────────────────────────────────────────────────────────
 function Hero() {
   const { t, isRTL } = useLanguage();
   const { company, primaryPhone } = useAdmin();
-
-  // Hide iframe if the video fails to start within the timeout window.
-  // This prevents the stuck YouTube logo state on iOS/regional restrictions.
-  const [iframeHidden, setIframeHidden] = useState(false);
-  const iframeRef = useRef(null);
 
   const DEFAULT_YT_ID = 'nF7J-F8YwJI';
   const ytIdFromAdmin = company?.heroVideoUrl
@@ -197,57 +208,69 @@ function Hero() {
     : null;
   const YT_ID = ytIdFromAdmin || DEFAULT_YT_ID;
 
-  // On touch devices: attach YT IFrame API listener to detect whether the hero
-  // video actually starts playing. If it hasn't started within 6 seconds, hide
-  // the iframe so the fallback image shows instead of the stuck YouTube logo.
+  // hostIdx: which YT_HOSTS entry we're currently trying
+  // 0 = nocookie (primary), 1 = youtube.com (retry), 2 = all failed → show fallback
+  const [hostIdx, setHostIdx] = useState(0);
+  const iframeRef = useRef(null);
+
+  // Recovery state machine:
+  //   - On mount (or YT_ID change): start with nocookie host
+  //   - Attach YT IFrame API onStateChange via enablejsapi=1
+  //   - If PLAYING/BUFFERING fires → success, do nothing
+  //   - If PLAY_TIMEOUT_MS passes with no playback → advance to next host
+  //   - After all hosts exhausted → hostIdx === YT_HOSTS.length → fallback shown
   useEffect(() => {
-    // Only apply the timeout guard on touch/mobile devices
-    const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
-    if (!isTouch) return;
+    // Reset to first host whenever the video ID changes
+    setHostIdx(0);
+  }, [YT_ID]);
+
+  useEffect(() => {
+    if (hostIdx >= YT_HOSTS.length) return; // already showing fallback
 
     let didPlay = false;
     let timeoutId = null;
+    let apiPlayer = null;
 
-    function onYTReady() {
+    function attachListener() {
       if (!iframeRef.current) return;
-
-      // Start the timeout: if no play state after 6s, hide the iframe
-      timeoutId = setTimeout(() => {
-        if (!didPlay) {
-          console.warn('[HeroVideo] No playback detected after 6s on touch device — hiding iframe');
-          setIframeHidden(true);
-        }
-      }, 6000);
-
       try {
-        const player = new window.YT.Player(iframeRef.current, {
+        apiPlayer = new window.YT.Player(iframeRef.current, {
           events: {
             onStateChange: (e) => {
-              // YT.PlayerState.PLAYING = 1, BUFFERING = 3
-              if (e.data === 1 || e.data === 3) {
+              if (e.data === 1 /* PLAYING */ || e.data === 3 /* BUFFERING */) {
                 didPlay = true;
                 if (timeoutId) clearTimeout(timeoutId);
-                setIframeHidden(false); // ensure visible if it was briefly hidden
+                console.info(`[HeroVideo] Playing on host ${YT_HOSTS[hostIdx]}`);
+              }
+            },
+            onError: () => {
+              // Immediate advance on player error (e.g. 101/150 = embed not allowed)
+              if (!didPlay) {
+                if (timeoutId) clearTimeout(timeoutId);
+                console.warn(`[HeroVideo] Player error on host ${YT_HOSTS[hostIdx]} — advancing`);
+                setHostIdx(prev => prev + 1);
               }
             },
           },
         });
-        // Cleanup on unmount
-        iframeRef._heroPlayer = player;
       } catch (err) {
         console.warn('[HeroVideo] Could not attach YT API listener:', err);
       }
+
+      // Start timeout — if no playback signal, advance to next host
+      timeoutId = setTimeout(() => {
+        if (!didPlay) {
+          console.warn(`[HeroVideo] Timeout on host ${YT_HOSTS[hostIdx]} — advancing to next`);
+          setHostIdx(prev => prev + 1);
+        }
+      }, PLAY_TIMEOUT_MS);
     }
 
     if (window.YT && window.YT.Player) {
-      onYTReady();
+      attachListener();
     } else {
-      // Script may already be loading from audio system — chain the callback
       const prev = window.onYouTubeIframeAPIReady;
-      window.onYouTubeIframeAPIReady = () => {
-        if (prev) prev();
-        onYTReady();
-      };
+      window.onYouTubeIframeAPIReady = () => { if (prev) prev(); attachListener(); };
       if (!document.getElementById('yt-iframe-api-script')) {
         const s = document.createElement('script');
         s.id = 'yt-iframe-api-script';
@@ -258,52 +281,53 @@ function Hero() {
 
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
-      if (iframeRef._heroPlayer) {
-        try { iframeRef._heroPlayer.destroy(); } catch {}
-        delete iframeRef._heroPlayer;
-      }
+      if (apiPlayer) { try { apiPlayer.destroy(); } catch {} }
     };
-  }, [YT_ID]);
+  }, [hostIdx, YT_ID]);
+
+  const iframeSrc = hostIdx < YT_HOSTS.length
+    ? buildYtSrc(YT_HOSTS[hostIdx], YT_ID)
+    : null;
 
   return (
     <section className="relative min-h-screen flex items-center overflow-hidden" style={{ background: '#F7F4EE' }}>
       {/* ── VIDEO or PHOTO BACKGROUND ── */}
       <div className="hero-video-wrap">
 
-        {/* Fallback photo — loading/safety layer behind the iframe.
-            Always visible; covered by iframe when video plays successfully. */}
+        {/* Fallback photo — always the base layer (z:0).
+            Fully visible when all YouTube hosts fail (iframeSrc = null). */}
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{ backgroundImage: `url('${IMGS.heroFallback}')`, zIndex: 0 }}
         />
 
-        {/* YouTube background video — rendered on all devices.
-            Hidden (opacity:0, pointer-events:none) if iframe failed to start. */}
-        <iframe
-          ref={iframeRef}
-          key={YT_ID}
-          src={`https://www.youtube.com/embed/${YT_ID}?autoplay=1&mute=1&muted=1&loop=1&playlist=${YT_ID}&controls=0&modestbranding=1&playsinline=1&rel=0&enablejsapi=1&disablekb=1&fs=0&iv_load_policy=3&showinfo=0`}
-          allow="autoplay; mute; encrypted-media; accelerometer; gyroscope; picture-in-picture"
-          allowFullScreen={false}
-          loading="eager"
-          aria-hidden="true"
-          title=""
-          style={{
-            position: 'absolute',
-            top: '50%', left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: '177.78vh',
-            minWidth: '100%',
-            height: '56.25vw',
-            minHeight: '100%',
-            border: 'none',
-            pointerEvents: 'none',
-            zIndex: 1,
-            // Fade out the iframe if it failed to play (stuck logo state)
-            opacity: iframeHidden ? 0 : 1,
-            transition: 'opacity 0.6s ease',
-          }}
-        />
+        {/* YouTube background video — primary experience on all devices.
+            Uses nocookie host first (Safari ITP safe), falls back to youtube.com,
+            then hides entirely if both fail, showing the fallback image cleanly. */}
+        {iframeSrc && (
+          <iframe
+            ref={iframeRef}
+            key={`${YT_HOSTS[hostIdx]}-${YT_ID}`}
+            src={iframeSrc}
+            allow="autoplay; mute; encrypted-media; accelerometer; gyroscope; picture-in-picture"
+            allowFullScreen={false}
+            loading="eager"
+            aria-hidden="true"
+            title=""
+            style={{
+              position: 'absolute',
+              top: '50%', left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: '177.78vh',
+              minWidth: '100%',
+              height: '56.25vw',
+              minHeight: '100%',
+              border: 'none',
+              pointerEvents: 'none',
+              zIndex: 1,
+            }}
+          />
+        )}
 
         {/* Final light gradient overlay — above both fallback (z:0) and iframe (z:1) */}
         <div className="hero-gradient-overlay absolute inset-0" style={{ zIndex: 2 }} />
