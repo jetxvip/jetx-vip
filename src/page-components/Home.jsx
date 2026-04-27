@@ -185,6 +185,7 @@ function HangarBackground() {
 function Hero() {
   const { t, isRTL } = useLanguage();
   const { company, primaryPhone } = useAdmin();
+
   const DEFAULT_YT_ID = 'nF7J-F8YwJI';
   const ytIdFromAdmin = company?.heroVideoUrl
     ? (company.heroVideoUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|v\/))([a-zA-Z0-9_-]{11})/) || [])[1] || null
@@ -195,37 +196,41 @@ function Hero() {
     <section className="relative min-h-screen flex items-center overflow-hidden" style={{ background: '#F7F4EE' }}>
       {/* ── VIDEO or PHOTO BACKGROUND ── */}
       <div className="hero-video-wrap">
-        {/* YouTube background video */}
+
+        {/* Fallback photo — loading/safety layer behind the iframe */}
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: `url('${IMGS.heroFallback}')`, zIndex: 0 }}
+        />
+
+        {/* YouTube background video — rendered on all devices */}
         <iframe
-          src={`https://www.youtube.com/embed/${YT_ID}?autoplay=1&mute=1&loop=1&playlist=${YT_ID}&controls=0&modestbranding=1&playsinline=1&rel=0&enablejsapi=0&disablekb=1&fs=0`}
-          allow="autoplay; encrypted-media"
+          key={YT_ID}
+          src={`https://www.youtube.com/embed/${YT_ID}?autoplay=1&mute=1&muted=1&loop=1&playlist=${YT_ID}&controls=0&modestbranding=1&playsinline=1&rel=0&enablejsapi=0&disablekb=1&fs=0&iv_load_policy=3&showinfo=0`}
+          allow="autoplay; mute; encrypted-media; accelerometer; gyroscope; picture-in-picture"
           allowFullScreen={false}
+          loading="eager"
           aria-hidden="true"
           title=""
           style={{
             position: 'absolute',
             top: '50%', left: '50%',
             transform: 'translate(-50%, -50%)',
-            width: '177.78vh',   /* 16/9 × 100vh */
+            width: '177.78vh',
             minWidth: '100%',
-            height: '56.25vw',  /* 9/16 × 100vw */
+            height: '56.25vw',
             minHeight: '100%',
             border: 'none',
             pointerEvents: 'none',
+            zIndex: 1,
           }}
         />
 
-        {/* Fallback photo shown until/if iframe fails to autoplay */}
-        <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url('${IMGS.heroFallback}')`, zIndex: -1 }}
-        />
-
-        {/* Final light gradient overlay */}
-        <div className="hero-gradient-overlay absolute inset-0" />
+        {/* Final light gradient overlay — above both fallback (z:0) and iframe (z:1) */}
+        <div className="hero-gradient-overlay absolute inset-0" style={{ zIndex: 2 }} />
         <div
           className="absolute inset-0"
-          style={{ background: 'linear-gradient(to right, rgba(247,244,238,0.78) 0%, rgba(247,244,238,0.25) 35%, rgba(247,244,238,0.05) 60%, transparent 78%)' }}
+          style={{ background: 'linear-gradient(to right, rgba(247,244,238,0.78) 0%, rgba(247,244,238,0.25) 35%, rgba(247,244,238,0.05) 60%, transparent 78%)', zIndex: 2 }}
         />
       </div>
 
