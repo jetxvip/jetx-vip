@@ -181,20 +181,26 @@ function HangarBackground() {
   );
 }
 
-// ─── YouTube embed hosts (tried in order on failed playback) ──────────────────
-// youtube-nocookie.com is the PRIMARY host — it does not require cross-site
-// cookies and works even when Safari ITP blocks third-party tracking (the root
-// cause of Cyprus/iOS stuck-logo issue). youtube.com is the fallback.
-const YT_HOSTS = [
-  'https://www.youtube-nocookie.com/embed',
-  'https://www.youtube.com/embed',
-];
-const PLAY_TIMEOUT_MS = 5000; // wait before declaring each attempt failed
+// ─── Extract YouTube video ID from any common URL format ─────────────────────
+function extractHeroYTId(url = '') {
+  if (!url) return null;
+  const m = url.match(
+    /(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|v\/))([a-zA-Z0-9_-]{11})/
+  );
+  return m ? m[1] : null;
+}
 
-function buildYtSrc(host, videoId) {
-  return `${host}/${videoId}?autoplay=1&mute=1&muted=1&loop=1&playlist=${videoId}` +
-    `&controls=0&modestbranding=1&playsinline=1&rel=0&enablejsapi=1` +
-    `&disablekb=1&fs=0&iv_load_policy=3&showinfo=0&origin=https://jetx.vip`;
+// Build the embed src. Uses youtube-nocookie.com (Safari ITP-safe, no tracking
+// cookies required) with all recommended params for muted background autoplay.
+function buildHeroSrc(videoId) {
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://jetx.vip';
+  return (
+    `https://www.youtube-nocookie.com/embed/${videoId}` +
+    `?autoplay=1&mute=1&muted=1&loop=1&playlist=${videoId}` +
+    `&controls=0&modestbranding=1&playsinline=1&rel=0` +
+    `&enablejsapi=1&disablekb=1&fs=0&iv_load_policy=3&showinfo=0` +
+    `&origin=${encodeURIComponent(origin)}`
+  );
 }
 
 // ─── Hero Section ─────────────────────────────────────────────────────────────
@@ -203,52 +209,71 @@ function Hero() {
   const { company, primaryPhone } = useAdmin();
 
   const DEFAULT_YT_ID = 'nF7J-F8YwJI';
-  const ytIdFromAdmin = company?.heroVideoUrl
-    ? (company.heroVideoUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|v\/))([a-zA-Z0-9_-]{11})/) || [])[1] || null
-    : null;
-  const YT_ID = ytIdFromAdmin || DEFAULT_YT_ID;
+  const YT_ID = extractHeroYTId(company?.heroVideoUrl) || DEFAULT_YT_ID;
 
-  // hostIdx: which YT_HOSTS entry we're currently trying
-  // 0 = nocookie (primary), 1 = youtube.com (retry), 2 = all failed → show fallback
-  const [hostIdx, setHostIdx] = useState(0);
+  // videoFailed: true ONLY after hard YT error (100/101/150) OR 10s with zero player signal.
+  //              iframe onLoad does NOT cancel the timer — only real YT player signals do.
+  const [videoFailed, setVideoFailed] = useState(false);
   const iframeRef = useRef(null);
+  const failTimerRef = useRef(null);
+  // Set true ONLY by: onReady, onStateChange(BUFFERING=3), onStateChange(PLAYING=1).
+  // iframe onLoad intentionally does NOT set this — it only means the iframe
+  // document loaded, not that the YouTube player is working.
+  const gotAnySignalRef = useRef(false);
 
-  // Recovery state machine:
-  //   - On mount (or YT_ID change): start with nocookie host
-  //   - Attach YT IFrame API onStateChange via enablejsapi=1
-  //   - If PLAYING/BUFFERING fires → success, do nothing
-  //   - If PLAY_TIMEOUT_MS passes with no playback → advance to next host
-  //   - After all hosts exhausted → hostIdx === YT_HOSTS.length → fallback shown
+  function cancelFailTimer() {
+    if (failTimerRef.current) {
+      clearTimeout(failTimerRef.current);
+      failTimerRef.current = null;
+    }
+  }
+
+  function markSignalReceived() {
+    if (!gotAnySignalRef.current) {
+      gotAnySignalRef.current = true;
+      cancelFailTimer();
+    }
+  }
+
+  // Reset on video ID change
   useEffect(() => {
-    // Reset to first host whenever the video ID changes
-    setHostIdx(0);
-  }, [YT_ID]);
+    gotAnySignalRef.current = false;
+    setVideoFailed(false);
+    cancelFailTimer();
+  }, [YT_ID]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Attach YT IFrame API events. Start the 10s last-resort timer.
+  // The timer is cancelled ONLY by real YT player signals: onReady, BUFFERING, PLAYING.
+  // iframe onLoad does NOT cancel it. Hard embed errors (100/101/150) set videoFailed
+  // immediately. The timer only fires when the YT player emits zero signal for 10s.
   useEffect(() => {
-    if (hostIdx >= YT_HOSTS.length) return; // already showing fallback
+    if (videoFailed) return;
 
-    let didPlay = false;
-    let timeoutId = null;
     let apiPlayer = null;
 
-    function attachListener() {
+    function attachApiListener() {
       if (!iframeRef.current) return;
       try {
         apiPlayer = new window.YT.Player(iframeRef.current, {
           events: {
+            onReady: () => {
+              // Player initialised — any sign of life cancels the timer
+              markSignalReceived();
+              console.info('[HeroVideo] YT player onReady');
+            },
             onStateChange: (e) => {
-              if (e.data === 1 /* PLAYING */ || e.data === 3 /* BUFFERING */) {
-                didPlay = true;
-                if (timeoutId) clearTimeout(timeoutId);
-                console.info(`[HeroVideo] Playing on host ${YT_HOSTS[hostIdx]}`);
+              // BUFFERING=3, PLAYING=1 — player is working, cancel timer
+              if (e.data === 3 || e.data === 1) {
+                markSignalReceived();
               }
             },
-            onError: () => {
-              // Immediate advance on player error (e.g. 101/150 = embed not allowed)
-              if (!didPlay) {
-                if (timeoutId) clearTimeout(timeoutId);
-                console.warn(`[HeroVideo] Player error on host ${YT_HOSTS[hostIdx]} — advancing`);
-                setHostIdx(prev => prev + 1);
+            onError: (e) => {
+              // 100 = video not found, 101/150 = embedding not allowed
+              // Only declare failure if we never received any prior signal
+              if (!gotAnySignalRef.current) {
+                console.warn('[HeroVideo] hard player error code:', e.data, '— fallback');
+                cancelFailTimer();
+                setVideoFailed(true);
               }
             },
           },
@@ -257,20 +282,22 @@ function Hero() {
         console.warn('[HeroVideo] Could not attach YT API listener:', err);
       }
 
-      // Start timeout — if no playback signal, advance to next host
-      timeoutId = setTimeout(() => {
-        if (!didPlay) {
-          console.warn(`[HeroVideo] Timeout on host ${YT_HOSTS[hostIdx]} — advancing to next`);
-          setHostIdx(prev => prev + 1);
+      // 10s last-resort timer. Fires ONLY if gotAnySignalRef is still false —
+      // meaning neither onReady, BUFFERING, nor PLAYING ever fired from the YT player.
+      cancelFailTimer();
+      failTimerRef.current = setTimeout(() => {
+        if (!gotAnySignalRef.current) {
+          console.warn('[HeroVideo] 10s — zero signal received — showing fallback');
+          setVideoFailed(true);
         }
-      }, PLAY_TIMEOUT_MS);
+      }, 10000);
     }
 
     if (window.YT && window.YT.Player) {
-      attachListener();
+      attachApiListener();
     } else {
       const prev = window.onYouTubeIframeAPIReady;
-      window.onYouTubeIframeAPIReady = () => { if (prev) prev(); attachListener(); };
+      window.onYouTubeIframeAPIReady = () => { if (prev) prev(); attachApiListener(); };
       if (!document.getElementById('yt-iframe-api-script')) {
         const s = document.createElement('script');
         s.id = 'yt-iframe-api-script';
@@ -280,45 +307,46 @@ function Hero() {
     }
 
     return () => {
-      if (timeoutId) clearTimeout(timeoutId);
+      cancelFailTimer();
       if (apiPlayer) { try { apiPlayer.destroy(); } catch {} }
     };
-  }, [hostIdx, YT_ID]);
-
-  const iframeSrc = hostIdx < YT_HOSTS.length
-    ? buildYtSrc(YT_HOSTS[hostIdx], YT_ID)
-    : null;
+  }, [YT_ID, videoFailed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <section className="relative min-h-screen flex items-center overflow-hidden" style={{ background: '#F7F4EE' }}>
       {/* ── VIDEO or PHOTO BACKGROUND ── */}
       <div className="hero-video-wrap">
 
-        {/* Fallback photo — always the base layer (z:0).
-            Fully visible when all YouTube hosts fail (iframeSrc = null). */}
+        {/* Fallback image — always rendered at z:0 as the loading backdrop.
+            Visible while iframe is loading, and if video ultimately fails.  */}
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{ backgroundImage: `url('${IMGS.heroFallback}')`, zIndex: 0 }}
         />
 
-        {/* YouTube background video — primary experience on all devices.
-            Uses nocookie host first (Safari ITP safe), falls back to youtube.com,
-            then hides entirely if both fail, showing the fallback image cleanly. */}
-        {iframeSrc && (
+        {/* YouTube iframe — primary hero background.
+            Rendered whenever we have a valid ID and no confirmed hard failure.
+            The iframe stays mounted permanently once loaded; fallback sits behind it. */}
+        {!videoFailed && (
           <iframe
             ref={iframeRef}
-            key={`${YT_HOSTS[hostIdx]}-${YT_ID}`}
-            src={iframeSrc}
+            key={YT_ID}
+            src={buildHeroSrc(YT_ID)}
             allow="autoplay; mute; encrypted-media; accelerometer; gyroscope; picture-in-picture"
             allowFullScreen={false}
             loading="eager"
             aria-hidden="true"
             title=""
+            onLoad={() => {
+              // iframe document loaded — does NOT cancel the fail timer.
+              // The YouTube player may still fail to initialise after the
+              // iframe document loads; only onReady/BUFFERING/PLAYING do.
+            }}
             style={{
               position: 'absolute',
               top: '50%', left: '50%',
               transform: 'translate(-50%, -50%)',
-              width: '177.78vh',
+              width: '177.77777778vh',
               minWidth: '100%',
               height: '56.25vw',
               minHeight: '100%',
