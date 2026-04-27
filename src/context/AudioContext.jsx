@@ -17,6 +17,27 @@ export function extractYouTubeId(url = '') {
   return m ? m[1] : null;
 }
 
+// ─── Load YouTube IFrame API script once ─────────────────────────────────────
+function ensureYTApiScript(onReady) {
+  if (typeof window === 'undefined') return;
+  if (window.YT && window.YT.Player) {
+    onReady();
+    return;
+  }
+  // Queue callback — multiple callers chain safely
+  const prev = window.onYouTubeIframeAPIReady;
+  window.onYouTubeIframeAPIReady = () => {
+    if (prev) prev();
+    onReady();
+  };
+  if (!document.getElementById('yt-iframe-api-script')) {
+    const s = document.createElement('script');
+    s.id = 'yt-iframe-api-script';
+    s.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(s);
+  }
+}
+
 export function AudioProvider({ children }) {
   const [audioUrl, setAudioUrl] = useState('');
   const [hasChosen, setHasChosen] = useState(false);
@@ -29,6 +50,81 @@ export function AudioProvider({ children }) {
   const audioRef = useRef(null);
   // Populated by YouTubeAudioPlayer once the YT IFrame API player is ready
   const ytPlayerRef = useRef(null);
+  // Pre-created player built while modal is visible (before user tap)
+  const ytPreloadPlayerRef = useRef(null);
+  // DOM node created at triggerPrompt time for the pre-created player
+  const ytPreloadContainerRef = useRef(null);
+
+  // ── Pre-create the YouTube player while the modal is visible ──────────────
+  // This way, when the user taps "Enable Sound", the player already exists
+  // and we can call playVideo() + unMute() synchronously inside the gesture.
+  const preloadYouTubePlayer = useCallback((videoId) => {
+    if (typeof window === 'undefined') return;
+
+    // Create a hidden container for the pre-load player
+    if (!ytPreloadContainerRef.current) {
+      const div = document.createElement('div');
+      div.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;overflow:hidden;z-index:-1;';
+      const inner = document.createElement('div');
+      inner.style.cssText = 'width:1px;height:1px;';
+      div.appendChild(inner);
+      document.body.appendChild(div);
+      ytPreloadContainerRef.current = inner;
+    }
+
+    function buildPlayer() {
+      // Destroy any previous preload player
+      if (ytPreloadPlayerRef.current) {
+        try { ytPreloadPlayerRef.current.destroy(); } catch {}
+        ytPreloadPlayerRef.current = null;
+      }
+
+      ytPreloadPlayerRef.current = new window.YT.Player(ytPreloadContainerRef.current, {
+        videoId,
+        playerVars: {
+          autoplay: 0, // Do NOT autoplay — user hasn't consented yet
+          loop: 1,
+          playlist: videoId,
+          controls: 0,
+          rel: 0,
+          modestbranding: 1,
+          fs: 0,
+          // playsinline required for iOS to allow inline playback
+          playsinline: 1,
+        },
+        events: {
+          onReady: (e) => {
+            // Mute, cue the video (loads metadata/buffer), but do NOT play yet
+            e.target.mute();
+            e.target.setVolume(60);
+            // Store in ytPlayerRef so toggleMute/floating button works
+            ytPlayerRef.current = e.target;
+            console.info('[YouTubePlayer] pre-created and ready for iOS gesture:', videoId);
+          },
+          onError: (e) => {
+            console.error('[YouTubePlayer] preload error code:', e.data);
+          },
+        },
+      });
+    }
+
+    ensureYTApiScript(buildPlayer);
+  }, [ytPlayerRef]);
+
+  // ── Cleanup pre-load player and its DOM container ─────────────────────────
+  const destroyPreloadPlayer = useCallback(() => {
+    if (ytPreloadPlayerRef.current) {
+      try { ytPreloadPlayerRef.current.destroy(); } catch {}
+      ytPreloadPlayerRef.current = null;
+    }
+    if (ytPreloadContainerRef.current) {
+      try {
+        const parent = ytPreloadContainerRef.current.parentElement;
+        if (parent && parent.parentElement) parent.parentElement.removeChild(parent);
+      } catch {}
+      ytPreloadContainerRef.current = null;
+    }
+  }, []);
 
   // ── Called by IntroWrapper after intro animation completes ─────────────────
   const triggerPrompt = useCallback((url) => {
@@ -41,6 +137,8 @@ export function AudioProvider({ children }) {
     if (ytId) {
       setIsYoutube(true);
       setYoutubeVideoId(ytId);
+      // Pre-create the player NOW so it's ready when user taps Enable Sound
+      preloadYouTubePlayer(ytId);
     } else {
       setIsYoutube(false);
       setYoutubeVideoId('');
@@ -55,7 +153,7 @@ export function AudioProvider({ children }) {
     }
 
     setShowPrompt(true);
-  }, []);
+  }, [preloadYouTubePlayer]);
 
   // ── Called when user clicks "Enable Sound" — direct user-gesture ───────────
   const enableAudio = useCallback(() => {
@@ -69,8 +167,27 @@ export function AudioProvider({ children }) {
     const ytId = extractYouTubeId(url);
 
     if (ytId) {
-      // YouTube: YouTubeAudioPlayer component handles actual playback
-      setIsPlaying(true);
+      // ── YouTube: call playVideo() + unMute() synchronously inside this gesture ──
+      // ytPlayerRef.current was populated by the pre-created player in triggerPrompt.
+      // This is the ONLY way to unblock iOS Safari — the play call must happen
+      // directly inside the user click handler with no async gaps.
+      const player = ytPlayerRef.current || ytPreloadPlayerRef.current;
+      if (player) {
+        try {
+          player.unMute();
+          player.setVolume(60);
+          player.playVideo(); // ← synchronous, inside user gesture ✓
+          setIsPlaying(true);
+          console.info('[YouTubePlayer] playVideo() called synchronously in gesture (iOS-safe)');
+        } catch (err) {
+          console.error('[YouTubePlayer] playVideo() failed:', err);
+          setIsPlaying(true); // Still signal playing; YouTubeAudioPlayer will retry
+        }
+      } else {
+        // Fallback: player wasn't ready yet — signal YouTubeAudioPlayer to handle it
+        console.warn('[YouTubePlayer] pre-created player not ready, falling back to YouTubeAudioPlayer');
+        setIsPlaying(true);
+      }
       return;
     }
 
@@ -90,6 +207,7 @@ export function AudioProvider({ children }) {
     el.volume = 0.6;
     el.loop = true;
 
+    // play() called synchronously inside user click handler — iOS-safe ✓
     const playPromise = el.play();
     if (playPromise !== undefined) {
       playPromise
@@ -104,7 +222,7 @@ export function AudioProvider({ children }) {
     } else {
       setIsPlaying(true);
     }
-  }, [audioUrl]);
+  }, [audioUrl, ytPreloadPlayerRef]);
 
   const declineAudio = useCallback(() => {
     audioChoiceMadeThisLoad = true;
@@ -114,7 +232,10 @@ export function AudioProvider({ children }) {
     setIsPlaying(false);
     const el = audioRef.current;
     if (el) { el.pause(); el.src = ''; }
-  }, []);
+    // Destroy the pre-created YouTube player on decline
+    destroyPreloadPlayer();
+    ytPlayerRef.current = null;
+  }, [destroyPreloadPlayer]);
 
   const toggleMute = useCallback(() => {
     setIsMuted(prev => {
@@ -161,6 +282,7 @@ export function AudioProvider({ children }) {
         ref={audioRef}
         loop
         preload="none"
+        playsInline
         style={{ display: 'none' }}
         onCanPlay={() => console.info('[AudioPlayer] canplay — buffer ready')}
         onPlay={() => console.info('[AudioPlayer] onplay')}

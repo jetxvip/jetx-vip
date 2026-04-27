@@ -2,8 +2,10 @@
 import { useEffect, useRef } from 'react';
 import { useAudio } from '../context/AudioContext';
 
-// Small visible YouTube player — required by YouTube ToS (cannot hide video element)
-// Positioned bottom-right above the floating buttons, minimised to 200×113px.
+// Fallback YouTube player — used only when the pre-created player in AudioContext
+// wasn't ready in time (e.g. very fast user tap before IFrame API loaded).
+// On iOS Safari the pre-created player + synchronous playVideo() in the gesture
+// is the primary path. This component handles the non-iOS / fallback path.
 export default function YouTubeAudioPlayer() {
   const { isYoutube, youtubeVideoId, isPlaying, isMuted, ytPlayerRef } = useAudio();
   const containerRef = useRef(null);
@@ -12,13 +14,24 @@ export default function YouTubeAudioPlayer() {
   useEffect(() => {
     if (!isYoutube || !isPlaying || !youtubeVideoId) return;
 
+    // If the pre-created player is already handling playback, don't create another
+    if (ytPlayerRef.current && typeof ytPlayerRef.current.getPlayerState === 'function') {
+      try {
+        const state = ytPlayerRef.current.getPlayerState();
+        // YT.PlayerState: -1=unstarted, 1=playing, 3=buffering
+        if (state === 1 || state === 3) {
+          console.info('[YouTubeAudioPlayer] Pre-created player already playing, skipping fallback');
+          return;
+        }
+      } catch {}
+    }
+
     function createPlayer() {
       if (!containerRef.current) return;
-      // Destroy existing player if present
+      // Destroy any existing fallback player
       if (internalPlayerRef.current) {
         try { internalPlayerRef.current.destroy(); } catch {}
         internalPlayerRef.current = null;
-        ytPlayerRef.current = null;
       }
 
       internalPlayerRef.current = new window.YT.Player(containerRef.current, {
@@ -26,22 +39,26 @@ export default function YouTubeAudioPlayer() {
         playerVars: {
           autoplay: 1,
           loop: 1,
-          playlist: youtubeVideoId, // required for loop to work
-          controls: 1,
+          playlist: youtubeVideoId,
+          controls: 0,
           rel: 0,
           modestbranding: 1,
           fs: 0,
+          playsinline: 1, // Required for iOS inline playback
         },
         events: {
           onReady: (e) => {
             e.target.setVolume(60);
             if (isMuted) e.target.mute();
             else e.target.unMute();
-            ytPlayerRef.current = e.target;
-            console.info('[YouTubePlayer] ready, video:', youtubeVideoId);
+            // Only update ytPlayerRef if not already set by pre-created player
+            if (!ytPlayerRef.current) {
+              ytPlayerRef.current = e.target;
+            }
+            console.info('[YouTubeAudioPlayer] fallback player ready, video:', youtubeVideoId);
           },
           onError: (e) => {
-            console.error('[YouTubePlayer] error code:', e.data);
+            console.error('[YouTubeAudioPlayer] error code:', e.data);
           },
         },
       });
@@ -50,14 +67,12 @@ export default function YouTubeAudioPlayer() {
     if (window.YT && window.YT.Player) {
       createPlayer();
     } else {
-      // Load the IFrame API script once
       if (!document.getElementById('yt-iframe-api-script')) {
         const script = document.createElement('script');
         script.id = 'yt-iframe-api-script';
         script.src = 'https://www.youtube.com/iframe_api';
         document.head.appendChild(script);
       }
-      // Callback invoked by the YT API once loaded
       const prev = window.onYouTubeIframeAPIReady;
       window.onYouTubeIframeAPIReady = () => {
         if (prev) prev();
@@ -66,17 +81,15 @@ export default function YouTubeAudioPlayer() {
     }
 
     return () => {
-      ytPlayerRef.current = null;
       if (internalPlayerRef.current) {
         try { internalPlayerRef.current.destroy(); } catch {}
         internalPlayerRef.current = null;
       }
     };
-    // Only recreate when video ID or playing state changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isYoutube, isPlaying, youtubeVideoId]);
 
-  // Keep mute in sync after player is ready
+  // Keep mute in sync
   useEffect(() => {
     if (!ytPlayerRef.current) return;
     try {
@@ -87,9 +100,8 @@ export default function YouTubeAudioPlayer() {
 
   if (!isYoutube || !isPlaying) return null;
 
+  // Hidden container — needed as a mount point for the fallback IFrame player
   return (
-    // Hidden container — IFrame API needs a real DOM node to attach to,
-    // but we keep it completely invisible and out of the layout.
     <div
       aria-hidden="true"
       style={{
