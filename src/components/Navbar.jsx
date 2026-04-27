@@ -125,7 +125,7 @@ export default function Navbar() {
                 {[{ code: 'he', label: 'עברית' }, { code: 'en', label: 'English' }, { code: 'ar', label: 'العربية' }, { code: 'ru', label: 'Русский' }].map((l, i) => (
                   <button
                     key={l.code}
-                    onClick={() => { setLang(l.code); setLangOpen(false); }}
+                    onClick={() => { try { localStorage.setItem('jetx_lang_explicit', l.code); } catch {} setLang(l.code); setLangOpen(false); }}
                     className="w-full flex items-center justify-between gap-3 px-4 py-2.5 text-left transition-colors duration-200 hover:bg-orange/8"
                     style={{ borderTop: i > 0 ? '1px solid rgba(42,37,33,0.06)' : 'none' }}
                   >
@@ -165,7 +165,7 @@ export default function Navbar() {
                     {[{ code: 'he', label: 'עברית' }, { code: 'en', label: 'English' }, { code: 'ar', label: 'العربية' }, { code: 'ru', label: 'Русский' }].map((l, i) => (
                       <button
                         key={l.code}
-                        onClick={() => { setLang(l.code); setMobileLangOpen(false); }}
+                        onClick={() => { try { localStorage.setItem('jetx_lang_explicit', l.code); } catch {} setLang(l.code); setMobileLangOpen(false); }}
                         className="w-full flex items-center justify-between gap-3 px-4 py-2.5 transition-colors duration-200"
                         style={{ borderTop: i > 0 ? '1px solid rgba(42,37,33,0.06)' : 'none' }}
                       >

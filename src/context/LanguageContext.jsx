@@ -1908,11 +1908,14 @@ const translations = {
 const LanguageContext = createContext(null);
 
 const VALID_LANGS = ['en', 'he', 'ar', 'ru'];
+// Separate key for explicit user choice vs auto-detected default.
+// Auto-detected defaults are NOT stored, so a return visit always re-detects
+// the correct locale (timezone/browser) rather than replaying a stale value.
+const LS_EXPLICIT = 'jetx_lang_explicit';
 
 function detectClientLang() {
-  // Only ever called on the client inside useEffect — safe to use localStorage/navigator
-  // 1. Respect previously saved user choice
-  const saved = localStorage.getItem('jetx_lang');
+  // 1. Respect EXPLICIT previously saved user choice (user tapped the language toggle)
+  const saved = localStorage.getItem(LS_EXPLICIT);
   if (VALID_LANGS.includes(saved)) return saved;
 
   // 2. Detect Israel via timezone (primary signal — most reliable)
@@ -1925,7 +1928,13 @@ function detectClientLang() {
   const locale = (navigator.language || '').toLowerCase();
   if (locale === 'he' || locale.startsWith('he-')) return 'he';
 
-  // 4. Everyone else gets English
+  // 4. Arabic locale
+  if (locale === 'ar' || locale.startsWith('ar-')) return 'ar';
+
+  // 5. Russian locale
+  if (locale === 'ru' || locale.startsWith('ru-')) return 'ru';
+
+  // 6. Everyone else gets English
   return 'en';
 }
 
@@ -1946,10 +1955,16 @@ export function LanguageProvider({ children }) {
   useEffect(() => {
     document.documentElement.dir = t.dir;
     document.documentElement.lang = lang;
-    localStorage.setItem('jetx_lang', lang);
+    // Do NOT persist auto-detected language — only explicit user choices are saved.
+    // This ensures a return visitor from Israel always gets Hebrew, not a stale 'en'.
   }, [lang, t.dir]);
 
-  const toggleLang = () => setLang(prev => prev === 'he' ? 'en' : prev === 'en' ? 'ar' : prev === 'ar' ? 'ru' : 'he');
+  const toggleLang = () => {
+    const next = lang === 'he' ? 'en' : lang === 'en' ? 'ar' : lang === 'ar' ? 'ru' : 'he';
+    // Persist only the explicit user choice
+    try { localStorage.setItem(LS_EXPLICIT, next); } catch {}
+    setLang(next);
+  };
 
   return (
     <LanguageContext.Provider value={{ lang, setLang, toggleLang, t, isRTL: t.dir === 'rtl' }}>
