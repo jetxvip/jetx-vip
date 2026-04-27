@@ -3,12 +3,11 @@ import { createContext, useContext, useState, useRef, useCallback } from 'react'
 
 // ─── Module-level: survives SPA navigation, resets on full page load ──────────
 let audioChoiceMadeThisLoad = false;
-// Store the URL at module level so enableAudio never reads stale React state
 let pendingAudioUrl = '';
 
 const AudioContext = createContext(null);
 
-// ─── Shared YouTube ID extractor ─────────────────────────────────────────────
+// ─── YouTube ID extractor ─────────────────────────────────────────────────────
 export function extractYouTubeId(url = '') {
   const m = url.match(
     /(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|v\/))([a-zA-Z0-9_-]{11})/
@@ -19,15 +18,9 @@ export function extractYouTubeId(url = '') {
 // ─── Load YouTube IFrame API script once ─────────────────────────────────────
 function ensureYTApiScript(onReady) {
   if (typeof window === 'undefined') return;
-  if (window.YT && window.YT.Player) {
-    onReady();
-    return;
-  }
+  if (window.YT && window.YT.Player) { onReady(); return; }
   const prev = window.onYouTubeIframeAPIReady;
-  window.onYouTubeIframeAPIReady = () => {
-    if (prev) prev();
-    onReady();
-  };
+  window.onYouTubeIframeAPIReady = () => { if (prev) prev(); onReady(); };
   if (!document.getElementById('yt-iframe-api-script')) {
     const s = document.createElement('script');
     s.id = 'yt-iframe-api-script';
@@ -45,25 +38,24 @@ export function AudioProvider({ children }) {
   const [isYoutube, setIsYoutube] = useState(false);
   const [youtubeVideoId, setYoutubeVideoId] = useState('');
 
-  // ── Single source-of-truth for which player is active ─────────────────────
-  // 'preloaded' → pre-created player is handling playback (primary path, iOS-safe)
-  // 'fallback'  → YouTubeAudioPlayer component handles playback (Android/Desktop fallback)
-  // null        → no YouTube player active
+  // 'preloaded' | 'fallback' | null — single source of truth for active player
   const [activePlayerType, setActivePlayerType] = useState(null);
 
+  // ── ytPlayerReady: true only after onReady fires on the pre-created player ──
+  // AudioModal uses this to disable "Enable Sound" until the player is safe to call.
+  // This eliminates the iOS race where the user taps before the player exists.
+  const [ytPlayerReady, setYtPlayerReady] = useState(false);
+
   const audioRef = useRef(null);
-  // Shared ref — populated by whichever player is active; used by toggleMute
   const ytPlayerRef = useRef(null);
-  // Pre-created player (built during modal display, before user tap)
   const ytPreloadPlayerRef = useRef(null);
-  // DOM container for the pre-created player
   const ytPreloadContainerRef = useRef(null);
 
-  // ── Pre-create the YouTube player while the modal is visible ──────────────
-  // Player starts paused/muted. When user taps "Enable Sound", playVideo() is
-  // called synchronously inside the click handler — the only iOS-safe approach.
+  // ── Pre-create YouTube player while modal is visible ──────────────────────
   const preloadYouTubePlayer = useCallback((videoId) => {
     if (typeof window === 'undefined') return;
+
+    setYtPlayerReady(false); // reset for this new player
 
     if (!ytPreloadContainerRef.current) {
       const div = document.createElement('div');
@@ -84,24 +76,29 @@ export function AudioProvider({ children }) {
       ytPreloadPlayerRef.current = new window.YT.Player(ytPreloadContainerRef.current, {
         videoId,
         playerVars: {
-          autoplay: 0,      // No autoplay — user hasn't consented yet
+          autoplay: 0,
           loop: 1,
           playlist: videoId,
           controls: 0,
           rel: 0,
           modestbranding: 1,
           fs: 0,
-          playsinline: 1,   // Required for iOS inline playback
+          playsinline: 1,
         },
         events: {
           onReady: (e) => {
             e.target.mute();
             e.target.setVolume(60);
             ytPlayerRef.current = e.target;
-            console.info('[YT/preloaded] player ready, video:', videoId);
+            // Signal that it is now safe to call playVideo() → enables the button
+            setYtPlayerReady(true);
+            console.info('[YT/preloaded] onReady — button unlocked, video:', videoId);
           },
           onError: (e) => {
-            console.error('[YT/preloaded] error code:', e.data);
+            // Unlock button even on error so the user is never stuck;
+            // enableAudio will route to fallback path.
+            setYtPlayerReady(true);
+            console.error('[YT/preloaded] onError code:', e.data);
           },
         },
       });
@@ -110,7 +107,6 @@ export function AudioProvider({ children }) {
     ensureYTApiScript(buildPlayer);
   }, []);
 
-  // ── Destroy the pre-created player and its DOM container ──────────────────
   const destroyPreloadPlayer = useCallback(() => {
     if (ytPreloadPlayerRef.current) {
       try { ytPreloadPlayerRef.current.destroy(); } catch {}
@@ -123,9 +119,10 @@ export function AudioProvider({ children }) {
       } catch {}
       ytPreloadContainerRef.current = null;
     }
+    setYtPlayerReady(false);
   }, []);
 
-  // ── Called by IntroWrapper after intro / on first interaction ─────────────
+  // ── triggerPrompt — called after intro / on first interaction ─────────────
   const triggerPrompt = useCallback((url) => {
     if (audioChoiceMadeThisLoad) return;
     if (!url) return;
@@ -140,6 +137,7 @@ export function AudioProvider({ children }) {
     } else {
       setIsYoutube(false);
       setYoutubeVideoId('');
+      setYtPlayerReady(true); // non-YT audio is always ready immediately
       if (audioRef.current) {
         audioRef.current.src = url;
         audioRef.current.volume = 0.6;
@@ -152,7 +150,7 @@ export function AudioProvider({ children }) {
     setShowPrompt(true);
   }, [preloadYouTubePlayer]);
 
-  // ── Called when user clicks "Enable Sound" — direct user-gesture ───────────
+  // ── enableAudio — must be called inside a direct user gesture ─────────────
   const enableAudio = useCallback(() => {
     audioChoiceMadeThisLoad = true;
     setHasChosen(true);
@@ -168,31 +166,27 @@ export function AudioProvider({ children }) {
         try {
           player.unMute();
           player.setVolume(60);
-          player.playVideo(); // ← synchronous, inside user gesture — iOS-safe ✓
-          // Mark preloaded as active BEFORE setIsPlaying so YouTubeAudioPlayer
-          // sees 'preloaded' immediately and skips creating a second player.
+          player.playVideo(); // synchronous inside user gesture — iOS-safe ✓
           setActivePlayerType('preloaded');
           setIsPlaying(true);
-          console.info('[YT/preloaded] playVideo() called synchronously in gesture');
+          console.info('[YT/preloaded] playVideo() called in gesture (iOS-safe)');
         } catch (err) {
-          console.error('[YT/preloaded] playVideo() failed:', err);
-          // Pre-created player failed → let fallback component handle it
+          console.error('[YT/preloaded] playVideo() threw:', err);
           setActivePlayerType('fallback');
           setIsPlaying(true);
         }
       } else {
-        // Player wasn't ready yet (very fast tap) → fallback handles playback
-        console.warn('[YT] pre-created player not ready, using fallback');
+        // Button was disabled until ready, so this path should be extremely rare
+        console.warn('[YT] player ref missing at enableAudio — falling back');
         setActivePlayerType('fallback');
         setIsPlaying(true);
       }
       return;
     }
 
-    // ── Direct audio file ──────────────────────────────────────────────────
+    // ── Direct audio ──────────────────────────────────────────────────────
     const el = audioRef.current;
     if (!el || !url) return;
-
     if (!el.src || !el.src.includes(url.replace(/^https?:\/\//, ''))) {
       el.src = url;
       el.load();
@@ -200,12 +194,10 @@ export function AudioProvider({ children }) {
     el.muted = false;
     el.volume = 0.6;
     el.loop = true;
-
-    const playPromise = el.play(); // synchronous call inside user gesture — iOS-safe ✓
-    if (playPromise !== undefined) {
-      playPromise
-        .then(() => { console.info('[AudioPlayer] started'); setIsPlaying(true); })
-        .catch((err) => { console.error('[AudioPlayer] play() rejected:', err.name, err.message); setIsPlaying(false); });
+    const p = el.play(); // inside user gesture — iOS-safe ✓
+    if (p !== undefined) {
+      p.then(() => setIsPlaying(true))
+       .catch((err) => { console.error('[AudioPlayer] play() rejected:', err.name, err.message); setIsPlaying(false); });
     } else {
       setIsPlaying(true);
     }
@@ -246,35 +238,21 @@ export function AudioProvider({ children }) {
 
   return (
     <AudioContext.Provider value={{
-      audioUrl,
-      hasChosen,
-      isPlaying,
-      isMuted,
-      showPrompt,
-      isYoutube,
-      youtubeVideoId,
-      activePlayerType,
-      audioRef,
-      ytPlayerRef,
-      triggerPrompt,
-      enableAudio,
-      declineAudio,
-      toggleMute,
-      openPrompt,
+      audioUrl, hasChosen, isPlaying, isMuted, showPrompt,
+      isYoutube, youtubeVideoId, activePlayerType, ytPlayerReady,
+      audioRef, ytPlayerRef,
+      triggerPrompt, enableAudio, declineAudio, toggleMute, openPrompt,
     }}>
-      {/* Persistent direct-audio element — only used for non-YouTube URLs */}
       <audio
         ref={audioRef}
-        loop
-        preload="none"
-        playsInline
+        loop preload="none" playsInline
         style={{ display: 'none' }}
         onPlay={() => console.info('[AudioPlayer] onplay')}
         onPause={() => console.info('[AudioPlayer] onpause')}
         onError={(e) => {
           const err = e.currentTarget.error;
-          const codes = ['MEDIA_ERR_ABORTED', 'MEDIA_ERR_NETWORK', 'MEDIA_ERR_DECODE', 'MEDIA_ERR_SRC_NOT_SUPPORTED'];
-          console.error('[AudioPlayer] onerror:', err ? `code=${err.code} (${codes[err.code - 1] || '?'})` : 'unknown');
+          const codes = ['MEDIA_ERR_ABORTED','MEDIA_ERR_NETWORK','MEDIA_ERR_DECODE','MEDIA_ERR_SRC_NOT_SUPPORTED'];
+          console.error('[AudioPlayer] onerror:', err ? `code=${err.code} (${codes[err.code-1]||'?'})` : 'unknown');
         }}
       />
       {children}
@@ -287,7 +265,7 @@ export function useAudio() {
   if (!ctx) return {
     audioUrl: '', hasChosen: false, isPlaying: false, isMuted: false,
     showPrompt: false, isYoutube: false, youtubeVideoId: '',
-    activePlayerType: null,
+    activePlayerType: null, ytPlayerReady: false,
     audioRef: { current: null }, ytPlayerRef: { current: null },
     triggerPrompt: () => {}, enableAudio: () => {}, declineAudio: () => {},
     toggleMute: () => {}, openPrompt: () => {},

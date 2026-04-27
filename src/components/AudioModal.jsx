@@ -57,12 +57,22 @@ function EqualizerIcon() {
   );
 }
 
+const PREPARING = {
+  he: 'מכין שמע…',
+  en: 'Preparing audio…',
+  ar: 'جارٍ التحضير…',
+  ru: 'Подготовка…',
+};
+
 export default function AudioModal() {
-  const { showPrompt, enableAudio, declineAudio } = useAudio();
+  const { showPrompt, enableAudio, declineAudio, isYoutube, ytPlayerReady } = useAudio();
   const { lang } = useLanguage();
 
   const L = LABELS[lang] || LABELS.en;
   const isRTL = lang === 'he' || lang === 'ar';
+
+  // Button is ready when: non-YouTube audio (always ready), or YouTube player onReady fired
+  const buttonReady = !isYoutube || ytPlayerReady;
 
   // Lock body scroll while modal is open
   useEffect(() => {
@@ -179,30 +189,34 @@ export default function AudioModal() {
           {L.sub}
         </p>
 
-        {/* Enable button */}
+        {/* Enable button — disabled until player is ready (prevents iOS race) */}
         <button
-          onClick={enableAudio}
+          onClick={buttonReady ? enableAudio : undefined}
+          disabled={!buttonReady}
           style={{
             display: 'block',
             width: '100%',
             padding: '14px 20px',
             borderRadius: 14,
             border: 'none',
-            background: 'linear-gradient(135deg, #E8651A, #c4531a)',
+            background: buttonReady
+              ? 'linear-gradient(135deg, #E8651A, #c4531a)'
+              : 'rgba(232,101,26,0.25)',
             color: '#fff',
             fontSize: 14,
             fontFamily: "'Inter', sans-serif",
             fontWeight: 500,
             letterSpacing: '0.05em',
-            cursor: 'pointer',
+            cursor: buttonReady ? 'pointer' : 'default',
             marginBottom: 12,
-            transition: 'opacity 0.2s, transform 0.15s',
-            boxShadow: '0 4px 20px rgba(232,101,26,0.35)',
+            transition: 'opacity 0.2s, transform 0.15s, background 0.3s',
+            boxShadow: buttonReady ? '0 4px 20px rgba(232,101,26,0.35)' : 'none',
+            opacity: buttonReady ? 1 : 0.6,
           }}
-          onMouseEnter={e => { e.currentTarget.style.opacity = '0.9'; e.currentTarget.style.transform = 'scale(1.02)'; }}
-          onMouseLeave={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.transform = 'scale(1)'; }}
+          onMouseEnter={e => { if (buttonReady) { e.currentTarget.style.opacity = '0.9'; e.currentTarget.style.transform = 'scale(1.02)'; } }}
+          onMouseLeave={e => { e.currentTarget.style.opacity = buttonReady ? '1' : '0.6'; e.currentTarget.style.transform = 'scale(1)'; }}
         >
-          {L.enable}
+          {buttonReady ? L.enable : (PREPARING[lang] || PREPARING.en)}
         </button>
 
         {/* Decline button */}

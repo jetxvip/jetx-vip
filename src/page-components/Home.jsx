@@ -186,27 +186,103 @@ function Hero() {
   const { t, isRTL } = useLanguage();
   const { company, primaryPhone } = useAdmin();
 
+  // Hide iframe if the video fails to start within the timeout window.
+  // This prevents the stuck YouTube logo state on iOS/regional restrictions.
+  const [iframeHidden, setIframeHidden] = useState(false);
+  const iframeRef = useRef(null);
+
   const DEFAULT_YT_ID = 'nF7J-F8YwJI';
   const ytIdFromAdmin = company?.heroVideoUrl
     ? (company.heroVideoUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|v\/))([a-zA-Z0-9_-]{11})/) || [])[1] || null
     : null;
   const YT_ID = ytIdFromAdmin || DEFAULT_YT_ID;
 
+  // On touch devices: attach YT IFrame API listener to detect whether the hero
+  // video actually starts playing. If it hasn't started within 6 seconds, hide
+  // the iframe so the fallback image shows instead of the stuck YouTube logo.
+  useEffect(() => {
+    // Only apply the timeout guard on touch/mobile devices
+    const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+    if (!isTouch) return;
+
+    let didPlay = false;
+    let timeoutId = null;
+
+    function onYTReady() {
+      if (!iframeRef.current) return;
+
+      // Start the timeout: if no play state after 6s, hide the iframe
+      timeoutId = setTimeout(() => {
+        if (!didPlay) {
+          console.warn('[HeroVideo] No playback detected after 6s on touch device — hiding iframe');
+          setIframeHidden(true);
+        }
+      }, 6000);
+
+      try {
+        const player = new window.YT.Player(iframeRef.current, {
+          events: {
+            onStateChange: (e) => {
+              // YT.PlayerState.PLAYING = 1, BUFFERING = 3
+              if (e.data === 1 || e.data === 3) {
+                didPlay = true;
+                if (timeoutId) clearTimeout(timeoutId);
+                setIframeHidden(false); // ensure visible if it was briefly hidden
+              }
+            },
+          },
+        });
+        // Cleanup on unmount
+        iframeRef._heroPlayer = player;
+      } catch (err) {
+        console.warn('[HeroVideo] Could not attach YT API listener:', err);
+      }
+    }
+
+    if (window.YT && window.YT.Player) {
+      onYTReady();
+    } else {
+      // Script may already be loading from audio system — chain the callback
+      const prev = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => {
+        if (prev) prev();
+        onYTReady();
+      };
+      if (!document.getElementById('yt-iframe-api-script')) {
+        const s = document.createElement('script');
+        s.id = 'yt-iframe-api-script';
+        s.src = 'https://www.youtube.com/iframe_api';
+        document.head.appendChild(s);
+      }
+    }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (iframeRef._heroPlayer) {
+        try { iframeRef._heroPlayer.destroy(); } catch {}
+        delete iframeRef._heroPlayer;
+      }
+    };
+  }, [YT_ID]);
+
   return (
     <section className="relative min-h-screen flex items-center overflow-hidden" style={{ background: '#F7F4EE' }}>
       {/* ── VIDEO or PHOTO BACKGROUND ── */}
       <div className="hero-video-wrap">
 
-        {/* Fallback photo — loading/safety layer behind the iframe */}
+        {/* Fallback photo — loading/safety layer behind the iframe.
+            Always visible; covered by iframe when video plays successfully. */}
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{ backgroundImage: `url('${IMGS.heroFallback}')`, zIndex: 0 }}
         />
 
-        {/* YouTube background video — rendered on all devices */}
+        {/* YouTube background video — rendered on all devices.
+            Hidden (opacity:0, pointer-events:none) if iframe failed to start. */}
         <iframe
+          ref={iframeRef}
           key={YT_ID}
-          src={`https://www.youtube.com/embed/${YT_ID}?autoplay=1&mute=1&muted=1&loop=1&playlist=${YT_ID}&controls=0&modestbranding=1&playsinline=1&rel=0&enablejsapi=0&disablekb=1&fs=0&iv_load_policy=3&showinfo=0`}
+          src={`https://www.youtube.com/embed/${YT_ID}?autoplay=1&mute=1&muted=1&loop=1&playlist=${YT_ID}&controls=0&modestbranding=1&playsinline=1&rel=0&enablejsapi=1&disablekb=1&fs=0&iv_load_policy=3&showinfo=0`}
           allow="autoplay; mute; encrypted-media; accelerometer; gyroscope; picture-in-picture"
           allowFullScreen={false}
           loading="eager"
@@ -223,6 +299,9 @@ function Hero() {
             border: 'none',
             pointerEvents: 'none',
             zIndex: 1,
+            // Fade out the iframe if it failed to play (stuck logo state)
+            opacity: iframeHidden ? 0 : 1,
+            transition: 'opacity 0.6s ease',
           }}
         />
 
