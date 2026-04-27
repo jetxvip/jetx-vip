@@ -2,33 +2,28 @@
 import { useEffect, useRef } from 'react';
 import { useAudio } from '../context/AudioContext';
 
-// Fallback YouTube player — used only when the pre-created player in AudioContext
-// wasn't ready in time (e.g. very fast user tap before IFrame API loaded).
-// On iOS Safari the pre-created player + synchronous playVideo() in the gesture
-// is the primary path. This component handles the non-iOS / fallback path.
+// Fallback YouTube player — mounts ONLY when activePlayerType === 'fallback'.
+// This fires when the pre-created player was not ready at the time the user
+// tapped "Enable Sound" (extremely fast tap before IFrame API loaded).
+//
+// When activePlayerType === 'preloaded', this component renders nothing and
+// creates no player — guaranteeing only one player ever plays at a time.
 export default function YouTubeAudioPlayer() {
-  const { isYoutube, youtubeVideoId, isPlaying, isMuted, ytPlayerRef } = useAudio();
+  const { isYoutube, youtubeVideoId, isPlaying, isMuted, activePlayerType, ytPlayerRef } = useAudio();
   const containerRef = useRef(null);
   const internalPlayerRef = useRef(null);
 
   useEffect(() => {
+    // Gate: only run when we are the designated active player type
     if (!isYoutube || !isPlaying || !youtubeVideoId) return;
-
-    // If the pre-created player is already handling playback, don't create another
-    if (ytPlayerRef.current && typeof ytPlayerRef.current.getPlayerState === 'function') {
-      try {
-        const state = ytPlayerRef.current.getPlayerState();
-        // YT.PlayerState: -1=unstarted, 1=playing, 3=buffering
-        if (state === 1 || state === 3) {
-          console.info('[YouTubeAudioPlayer] Pre-created player already playing, skipping fallback');
-          return;
-        }
-      } catch {}
+    if (activePlayerType !== 'fallback') {
+      // Pre-created player is handling it — do nothing
+      console.info('[YT/fallback] skipped — activePlayerType is', activePlayerType);
+      return;
     }
 
     function createPlayer() {
       if (!containerRef.current) return;
-      // Destroy any existing fallback player
       if (internalPlayerRef.current) {
         try { internalPlayerRef.current.destroy(); } catch {}
         internalPlayerRef.current = null;
@@ -44,21 +39,18 @@ export default function YouTubeAudioPlayer() {
           rel: 0,
           modestbranding: 1,
           fs: 0,
-          playsinline: 1, // Required for iOS inline playback
+          playsinline: 1,
         },
         events: {
           onReady: (e) => {
             e.target.setVolume(60);
             if (isMuted) e.target.mute();
             else e.target.unMute();
-            // Only update ytPlayerRef if not already set by pre-created player
-            if (!ytPlayerRef.current) {
-              ytPlayerRef.current = e.target;
-            }
-            console.info('[YouTubeAudioPlayer] fallback player ready, video:', youtubeVideoId);
+            ytPlayerRef.current = e.target;
+            console.info('[YT/fallback] player ready, video:', youtubeVideoId);
           },
           onError: (e) => {
-            console.error('[YouTubeAudioPlayer] error code:', e.data);
+            console.error('[YT/fallback] error code:', e.data);
           },
         },
       });
@@ -87,20 +79,21 @@ export default function YouTubeAudioPlayer() {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isYoutube, isPlaying, youtubeVideoId]);
+  }, [isYoutube, isPlaying, youtubeVideoId, activePlayerType]);
 
-  // Keep mute in sync
+  // Mute sync for the fallback player
   useEffect(() => {
+    if (activePlayerType !== 'fallback') return;
     if (!ytPlayerRef.current) return;
     try {
       if (isMuted) ytPlayerRef.current.mute();
       else ytPlayerRef.current.unMute();
     } catch {}
-  }, [isMuted, ytPlayerRef]);
+  }, [isMuted, activePlayerType, ytPlayerRef]);
 
-  if (!isYoutube || !isPlaying) return null;
+  // Render nothing when not needed — no DOM, no IFrame
+  if (!isYoutube || !isPlaying || activePlayerType !== 'fallback') return null;
 
-  // Hidden container — needed as a mount point for the fallback IFrame player
   return (
     <div
       aria-hidden="true"
