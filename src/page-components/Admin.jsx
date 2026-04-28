@@ -1937,6 +1937,32 @@ function CompanyTab() {
         })()}
       </div>
 
+      {/* ── Hero Video — Direct MP4 URL ── */}
+      <div className="p-6 rounded-2xl mb-5" style={box}>
+        <p className="text-[11px] tracking-[0.3em] uppercase font-sans mb-1" style={{ color: th.textSec }}>וידאו הירו — קובץ ישיר (MP4)</p>
+        <p className="text-xs font-sans mb-4" style={{ color: 'rgba(255,255,255,0.3)' }}>
+          קישור ישיר לקובץ וידאו MP4 — עדיפות על YouTube. מומלץ לאירוח ב-Cloudflare R2, S3 או CDN.
+          אם מוגדר, ישמש כרקע ראשי. YouTube ישמש כגיבוי.
+        </p>
+        <label className={lbl} style={{ color: th.textMuted }}>קישור ישיר לוידאו MP4</label>
+        <input
+          type="url"
+          dir="ltr"
+          value={form.heroVideoMp4Url || ''}
+          onChange={e => field('heroVideoMp4Url', e.target.value)}
+          placeholder="https://cdn.example.com/hero.mp4"
+          className={inputCls}
+          style={{ ...iStyle, unicodeBidi: 'embed' }}
+          onFocus={e => Object.assign(e.target.style, { ...iFocus, unicodeBidi: 'embed' })}
+          onBlur={e => Object.assign(e.target.style, { ...iStyle, unicodeBidi: 'embed' })}
+        />
+        {form.heroVideoMp4Url?.trim() && (
+          /^https?:\/\/.+\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(form.heroVideoMp4Url.trim())
+            ? <p className="mt-2 text-xs font-sans" style={{ color: 'rgba(34,197,94,0.85)' }}>✓ קובץ וידאו תקין — ישמש כרקע ראשי</p>
+            : <p className="mt-2 text-xs font-sans" style={{ color: '#f87171' }}>⚠ הקישור צריך להסתיים ב־.mp4 / .webm / .mov</p>
+        )}
+      </div>
+
       {/* ── Audio Experience URL ── */}
       <div className="p-6 rounded-2xl mb-5" style={box}>
         <p className="text-[11px] tracking-[0.3em] uppercase font-sans mb-1" style={{ color: th.textSec }}>חוויה קולית — Audio Experience</p>

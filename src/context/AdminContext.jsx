@@ -240,6 +240,7 @@ const DEFAULT_COMPANY = {
   tiktok:        '',
   x:             '',
   heroVideoUrl:       '',
+  heroVideoMp4Url:    '',
   audioExperienceUrl: '',
   // Multi-contact arrays (up to 5 each)
   phones: [{ number: '+972-50-000-0000', label: 'ראשי', primary: true }],
