@@ -95,10 +95,6 @@ function Hero({ company, ta, dir }) {
           <p className="font-sans font-light text-lg leading-relaxed mb-10" style={{ color: 'rgba(247,244,238,0.72)', maxWidth: '38rem' }}>
             {ta.hero.sub}
           </p>
-          <div className="flex flex-wrap gap-4 items-center">
-            <PhoneDisplay phone={company?.phone} />
-            <WAButton href={waHref} label={ta.hero.waLabel} style="outline" />
-          </div>
         </div>
       </div>
     </section>

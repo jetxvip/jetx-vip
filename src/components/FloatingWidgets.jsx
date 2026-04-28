@@ -199,10 +199,10 @@ function AccessibilityPanel({ onClose, isRTL }) {
       dir={isRTL ? 'rtl' : 'ltr'}
       style={{
         position: 'fixed',
-        bottom: 80,
+        bottom: '80px',
         left: panelLeft,
         right: panelRight,
-        width: 270,
+        width: '270px',
         maxHeight: 'calc(100vh - 120px)',
         overflowY: 'auto',
         background: '#fff',
@@ -391,7 +391,7 @@ export default function FloatingWidgets() {
       {/* Floating button stack */}
       <div style={{
         position: 'fixed',
-        bottom: 84,
+        bottom: '84px',
         ...(isRTL ? { right: 24 } : { left: 24 }),
         display: 'flex',
         flexDirection: 'column',
